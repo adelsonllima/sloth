@@ -37,7 +37,7 @@ class Dashboard(metaclass=DashboardType):
         self.request = request
         self.data = dict(
             info=[], warning=[], search=[], menu=[], links=[], shortcuts=[], cards=[],
-            floating=[], navigation=[], settings=[], center=[], right=[], actions=[]
+            floating=[], navigation=[], settings=[], center=[], right=[], actions=[], top=[]
         )
         self.load(request)
 
@@ -128,18 +128,27 @@ class Dashboard(metaclass=DashboardType):
     def settings(self, *models):
         self._load('settings', models)
 
-    def append(self, data, aside=False):
+    def append(self, data, aside=False, top=False):
         if aside and hasattr(data, 'compact'):
             data.compact()
         if self.request.path == '/app/':
-            self.data['right' if aside else 'center'].append(
-                str(data.contextualize(self.request))
-            )
+            html = str(data.contextualize(self.request))
+            if aside:
+                self.data['right'].append(html)
+            elif top:
+                self.data['top'].append(html)
+            else:
+                self.data['center'].append(html)
 
-    def extend(self, data, template, aside=False):
+    def extend(self, data, template, aside=False, top=False):
         if self.request.path == '/app/':
             html = mark_safe(render_to_string(template, data, request=self.request))
-            self.data['right' if aside else 'center'].append(html)
+            if aside:
+                self.data['right'].append(html)
+            elif top:
+                self.data['top'].append(html)
+            else:
+                self.data['center'].append(html)
 
     def load(self, request):
         pass
@@ -151,7 +160,7 @@ class Dashboards:
         self.request = request
         self.data = dict(
             info=[], warning=[], search=[], menu=[], links=[], shortcuts=[], cards=[],
-            floating=[], navigation=[], settings=[], center=[], right=[], actions=[]
+            floating=[], navigation=[], settings=[], center=[], right=[], actions=[], top=[]
         )
         self.data['navigation'].append(
             dict(url='/app/', label='Principal', icon='house')
@@ -184,6 +193,3 @@ class Dashboards:
 
     def __str__(self):
         return mark_safe(render_to_string('app/dashboard/dashboards.html', dict(data=self.data), request=self.request))
-
-
-
