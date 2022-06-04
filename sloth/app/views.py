@@ -30,7 +30,7 @@ def view(func):
         except JsonReadyResponseException as e:
             return JsonResponse(e.data)
         except HtmlJsonReadyResponseException as e:
-            messages = render_to_string('app/messages/messages.html', request=request)
+            messages = render_to_string('app/messages.html', request=request)
             return HttpResponse(messages + e.html)
         except PermissionDenied:
             return HttpResponseForbidden()
@@ -83,8 +83,16 @@ def icons(request):
     return render(request, ['app/icons.html'], dict(bootstrap=bootstrap.ICONS))
 
 
-def logo(request):
-    return HttpResponseRedirect(settings.LOGO)
+def icon(request):
+    return HttpResponseRedirect(
+        settings.SLOTH['ICON'] or '/static/images/icon.png'
+    )
+
+
+def favicon(request):
+    return HttpResponseRedirect(
+        settings.SLOTH['FAVICON'] or '/static/images/icon.png'
+    )
 
 
 def login(request):
@@ -121,11 +129,10 @@ def oauth_login(request, provider_name):
             'Authorization': 'Bearer {}'.format(data.get('access_token')), 'x-api-key': provider['CLIENT_SECRET']
         }
 
-        if provider.get('USER_DATA_METHOD', 'POST').upper() == 'POST':
+        if provider.get('USER_DATA_METHOD', 'GET').upper() == 'POST':
             data = json.loads(requests.post(provider['USER_DATA_URL'], data={'scope': data.get('scope')}, headers=headers).text)
         else:
             data = json.loads(requests.get(provider['USER_DATA_URL'], data={'scope': data.get('scope')}, headers=headers).text)
-
         user = User.objects.filter(username=data[provider['USER_DATA']['USERNAME']]).first()
         if user is None:
             user = User.objects.create(
@@ -150,7 +157,6 @@ def password(request):
 
 def logout(request):
     request.session.clear()
-    request.session.save()
     auth.logout(request)
     return HttpResponseRedirect('/')
 

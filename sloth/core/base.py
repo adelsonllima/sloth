@@ -1,13 +1,14 @@
 from functools import lru_cache
 import types
 from django.apps import apps
+from django.conf import settings
 from django.core.exceptions import FieldDoesNotExist
 from django.template.loader import render_to_string
 
 from sloth.actions import Action
 from sloth.core.valueset import ValueSet
 from sloth.core.queryset import QuerySet
-from sloth.utils import to_snake_case, to_camel_case
+from sloth.utils import to_snake_case, to_camel_case, getattrr
 
 FILTER_FIELD_TYPES = 'BooleanField', 'NullBooleanField', 'ForeignKey', 'ForeignKeyPlus', 'DateField', 'DateFieldPlus'
 SEARCH_FIELD_TYPES = 'CharField', 'CharFieldPlus', 'TextField'
@@ -114,22 +115,33 @@ class ModelMixin(object):
 
     ### ROLE CREATION ###
 
-    def get_role_tuples(self):
+    def get_role_tuples(self, ignore_active_condition=False):
         model = type(self)
         tuples = set()
         for role in self.__roles__:
-            lookups = list()
-            lookups.append(role['username'])
-            if model.__name__.lower() not in role['scopes']:
-                role['scopes'][model.__name__.lower()] = 'id'
-            lookups.extend(role['scopes'].values())
-            values = model.objects.filter(pk=self.pk).values(*set(lookups))
-            for value in values:
-                if value[role['username']]:
-                    for scope_key, lookup in role['scopes'].items():
-                        scope_type = model if lookup in ('id', 'pk') else model.get_field(lookup).related_model
-                        scope_value = value[lookup]
-                        tuples.add((value[role['username']], role['name'], scope_type, scope_key, scope_value))
+            if ignore_active_condition or role['active'] is None or getattrr(self, role['active'])[1]:
+                lookups = list()
+                lookups.append(role['username'])
+                if role['email']:
+                    lookups.append(role['email'])
+                if model.__name__.lower() not in role['scopes']:
+                    role['scopes'][model.__name__.lower()] = 'id'
+                lookups.extend(role['scopes'].values())
+                if role['name'].islower():
+                    lookups.append(role['name'])
+                values = model.objects.filter(pk=self.pk).values(*set(lookups))
+                for value in values:
+                    username = value[role['username']]
+                    email = value[role['emai']] if role['email'] else None
+                    if username:
+                        for scope_key, lookup in role['scopes'].items():
+                            scope_name = value[role['name']] if role['name'].islower() else role['name']
+                            scope_type = model if lookup in ('id', 'pk') else model.get_field(lookup).related_model
+                            scope_value = value[lookup]
+                            tuples.add((username, email, scope_name, scope_type, scope_key, scope_value))
+        # print('----- {} -----'.format(self))
+        # for x in tuples: print(x)
+        # print('\n\n')
         return tuples
 
     def sync_roles(self, role_tuples):
@@ -137,34 +149,34 @@ class ModelMixin(object):
         user_id = None
         role = apps.get_model('api', 'Role')
         role_tuples2 = self.get_role_tuples()
-        # for x in role_tuples: print(x)
-        # print('\n')
-        # for x in role_tuples2: print(x)
-        # print('\n\n')
-        added_role_tuples = role_tuples2 - role_tuples
-        # print('ADDED: ', added_role_tuples)
-        for username, name, scope_type, scope_key, scope_value in role_tuples2:
+        for username, email, scope_name, scope_type, scope_key, scope_value in role_tuples2:
             if scope_value:
                 user_id = User.objects.filter(username=username).values_list('id', flat=True).first()
                 scope_type = '{}.{}'.format(scope_type.metaclass().app_label, scope_type.metaclass().model_name)
                 if user_id is None:
                     user = User.objects.create(username=username)
-                    user.set_password('123')
+                    if email:
+                        setattr(user, email)
+                    if 'DEFAULT_PASSWORD' in settings.SLOTH:
+                        default_password = settings.SLOTH['DEFAULT_PASSWORD'](user)
+                    else:
+                        default_password = '123' if settings.DEBUG else str(abs(hash(username)))
+                    user.set_password(default_password)
                     user.save()
                     user_id = user.id
                 role.objects.get_or_create(
-                    user_id=user_id, name=name,
+                    user_id=user_id, name=scope_name,
                     scope_type=scope_type,
                     scope_key=scope_key, scope_value=scope_value
                 )
         deleted_role_tuples = role_tuples - role_tuples2
         # print('DELETED: ', deleted_role_tuples)
-        for username, name, scope_type, scope_key, scope_value in deleted_role_tuples:
+        for username, email, scope_name, scope_type, scope_key, scope_value in deleted_role_tuples:
             if user_id is None:
                 user_id = User.objects.filter(username=username).values_list('id', flat=True).first()
             scope_type = '{}.{}'.format(scope_type.metaclass().app_label, scope_type.metaclass().model_name)
             role.objects.filter(
-                user_id=user_id, name=name, scope_type=scope_type, scope_key=scope_key, scope_value=scope_value
+                user_id=user_id, name=scope_name, scope_type=scope_type, scope_key=scope_key, scope_value=scope_value
             ).delete()
 
     @classmethod
@@ -263,8 +275,9 @@ class ModelMixin(object):
                 for name in dir(forms):
                     if name.lower() == to_camel_case(action).lower():
                         return getattr(forms, name)
-            except ModuleNotFoundError:
-                pass
+            except ModuleNotFoundError as e:
+                if not e.name.endswith('actions'):
+                    raise e
             return None
 
     @classmethod
@@ -316,12 +329,16 @@ class ModelMixin(object):
     def get_attr_metadata(cls, lookup):
         field = cls.get_field(lookup)
         if field:
-            return str(getattr(field, 'verbose_name', lookup)), True, None
+            return str(getattr(field, 'verbose_name', lookup)), True, None, None
         attr = getattr(cls, lookup)
         template = getattr(attr, '__template__', None)
-        if template and not template.endswith('.html'):
-            template = '{}.html'.format(template)
-        return getattr(attr, '__verbose_name__', lookup), False, template
+        metadata = getattr(attr, '__metadata__', None)
+        if template:
+            if not template.endswith('.html'):
+                template = '{}.html'.format(template)
+            if not template.startswith('.html'):
+                template = 'renders/{}'.format(template)
+        return getattr(attr, '__verbose_name__', lookup), False, template, metadata
 
     @classmethod
     def get_attr_api_type(cls, lookup):

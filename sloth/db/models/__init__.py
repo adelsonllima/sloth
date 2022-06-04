@@ -162,12 +162,27 @@ class TextField(TextField):
 class ForeignKey(ForeignKey):
     def __init__(self, to, on_delete=CASCADE, **kwargs):
         self.username_lookup = kwargs.pop('username_lookup', None)
+        self.picker = kwargs.pop('picker', None)
         super().__init__(to=to, on_delete=on_delete, **kwargs)
 
     def formfield(self, **kwargs):
         field = super().formfield(**kwargs)
         if self.username_lookup:
             field.username_lookup = self.username_lookup
+        if self.picker:
+            field.picker = self.picker
+        return field
+
+
+class ManyToManyField(ManyToManyField):
+    def __init__(self, *args, **kwargs):
+        self.picker = kwargs.pop('picker', None)
+        super().__init__(*args, **kwargs)
+
+    def formfield(self, **kwargs):
+        field = super().formfield(**kwargs)
+        if self.picker:
+            field.picker = self.picker
         return field
 
 
@@ -218,20 +233,32 @@ class Model(models.Model, ModelMixin, metaclass=base.ModelBase):
         abstract = True
 
     def pre_save(self, *args, **kwargs):
-        pass
+        setattr(self, '_pre_saved', True)
+        if hasattr(self, '__roles__'):
+            setattr(self, '_role_tuples', self.get_role_tuples(True))
 
     def save(self, *args, **kwargs):
-        if hasattr(self, '__roles__'):
-            setattr(self, '_role_tuples', self.get_role_tuples())
+        pre_saved = getattr(self, '_pre_saved', False)
+        if pre_saved is False:
+            self.pre_save()
+
         super().save(*args, **kwargs)
+
+        if pre_saved is False:
+            self.post_save()
 
     def post_save(self, *args, **kwargs):
         if hasattr(self, '__roles__') and hasattr(self, '_role_tuples'):
             self.sync_roles(getattr(self, '_role_tuples'))
 
+    def persist(self):
+        self.pre_save()
+        self.save()
+        self.post_save()
+
     def delete(self, *args, **kwargs):
         if hasattr(self, '__roles__'):
-            setattr(self, '_role_tuples', self.get_role_tuples())
+            setattr(self, '_role_tuples', self.get_role_tuples(True))
         super().delete(*args, **kwargs)
         if hasattr(self, '__roles__') and hasattr(self, '_role_tuples'):
             self.sync_roles(getattr(self, '_role_tuples'))

@@ -83,16 +83,16 @@ class QuerySet(models.QuerySet):
     def get_search(self, verbose=False):
         search = {}
         for lookup in self.metadata['search'] or self.model.default_search_fields():
-            verbose_name, _, _ = self.model.get_attr_metadata(lookup)
+            verbose_name = self.model.get_attr_metadata(lookup)[0]
             search[verbose_name if verbose else lookup] = dict(key=lookup, name=verbose_name)
         return search
 
     def get_display(self, verbose=False):
         display = {}
         for lookup in self.get_list_display():
-            verbose_name, sort, template = self.model.get_attr_metadata(lookup)
+            verbose_name, sort, template, metadata = self.model.get_attr_metadata(lookup)
             display[pretty(verbose_name) if verbose else lookup] = dict(
-                key=lookup, name=pretty(verbose_name), sort=sort, template=template
+                key=lookup, name=pretty(verbose_name), sort=sort, template=template, metadata=metadata
             )
         return display
 
@@ -454,12 +454,12 @@ class QuerySet(models.QuerySet):
         return self
 
     def search(self, *names, q=None):
-        self.metadata['search'] = list(names)
         if q:
             lookups = []
             for search_field in self.metadata['search'] or self.model.default_search_fields():
                 lookups.append(Q(**{'{}__icontains'.format(search_field): q}))
             return self.filter(reduce(operator.__or__, lookups))
+        self.metadata['search'] = list(names)
         return self
 
     def filters(self, *names):

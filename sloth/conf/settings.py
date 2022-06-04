@@ -18,17 +18,18 @@ OAUTH2_PROVIDER = {
 
 SLOTH = {
 	'NAME': 'Sloth',
-	'ICON': '/static/images/sloth.png',
-	'FAVICON': None,
+	'ICON': '/static/images/icon.png',
+	'FAVICON': '/static/images/icon.png',
 	'VERSION': 1.0,
 	'LOGIN': {
-		'LOGO': '/static/images/sloth.png',
+		'LOGO': '/static/images/logo.png',
 		'TITLE': None,
 		'TEXT': None,
-		'IMAGE': None,
+		'IMAGE': '/static/images/login.jpeg',
+		'USERNAME_MASK': None
 	},
 	'HEADER': {
-		'LOGO': '/static/images/sloth.png',
+		'LOGO': '/static/images/logo.png',
 		'TITLE': None,
 		'TEXT': None,
 	},
@@ -55,7 +56,8 @@ SLOTH = {
             'ACCESS_TOKEN_URL': None,
             'USER_DATA_URL': None
         }
-    }
+    },
+	'DEFAULT_PASSWORD': lambda user: '123',
 }
 
 # #SESSION_ENGINE = 'django.contrib.sessions.backends.cache'

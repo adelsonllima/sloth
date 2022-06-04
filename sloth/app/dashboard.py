@@ -18,9 +18,9 @@ def initilize():
             try:
                 __import__(module, fromlist=app_label.split('.'))
                 # print('{} dashboard initilized!'.format(module))
-            except ImportError:
-                # print(app_label, module, 'ERROR')
-                pass
+            except ImportError as e:
+                if not e.name.endswith('dashboard'):
+                    raise e
 
 
 class DashboardType(type):
@@ -39,7 +39,8 @@ class Dashboard(metaclass=DashboardType):
             info=[], warning=[], search=[], menu=[], links=[], shortcuts=[], cards=[],
             floating=[], navigation=[], settings=[], center=[], right=[], actions=[], top=[]
         )
-        self.load(request)
+        if self.request.user.is_authenticated:
+            self.load(request)
 
     def to_item(self, model, count=True):
         return
