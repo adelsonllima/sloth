@@ -6,7 +6,17 @@
             </div>
         {% endfor %}
         {% include "app/dashboard/shortcuts.html" %}
-        {% include "app/dashboard/cards.html" %}
+        <div class="row">
+            {% for grid in data.grids %}
+                <div class="col-sm-12 col-md-6 col-lg-{% widthratio grid.size 1 grid_size %}" style="padding:3px">
+                    {% if grid.html %}
+                        {{ grid.html }}
+                    {% else %}
+                        {% include "app/dashboard/cards.html" with item=grid %}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
         {% for item in data.center %}
             <div class="mb-3">
             {{ item }}
