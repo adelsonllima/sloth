@@ -58,8 +58,8 @@ SLOTH = {
         }
     },
 	'DEFAULT_PASSWORD': lambda user: '123',
-	'FORCE_PASSWORD_DEFINITION': True,
 	'LIST_PER_PAGE': 20,
+	'FORCE_PASSWORD_DEFINITION': False,
 }
 
 # #SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
