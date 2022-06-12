@@ -9,22 +9,8 @@ from sloth.db import models
 from sloth.exceptions import ReadyResponseException
 from sloth.utils import pretty
 
-INITIALIZE = True
+
 DASHBOARDS = []
-
-
-def initilize():
-    global INITIALIZE
-    if INITIALIZE:
-        INITIALIZE = False
-        for app_label in settings.INSTALLED_APPS:
-            module = '{}.{}'.format(app_label, 'dashboard')
-            try:
-                __import__(module, fromlist=app_label.split('.'))
-                # print('{} dashboard initilized!'.format(module))
-            except ImportError as e:
-                if not e.name.endswith('dashboard'):
-                    raise e
 
 
 class DashboardType(type):
@@ -238,7 +224,6 @@ class Dashboards:
         self.data['navigation'].append(
             dict(url='/app/', label='Principal', icon='house', app=None)
         )
-        initilize()
         for cls in DASHBOARDS:
             dashboard = cls(request)
             self.grid_size = dashboard.get_grid_size()
